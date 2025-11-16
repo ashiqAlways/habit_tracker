@@ -1,6 +1,10 @@
-from datetime import date
+from datetime import date, timedelta
 from flask import Flask, render_template, request, url_for, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import UniqueConstraint
+
+
+
 
 app = Flask(__name__)
 
@@ -19,17 +23,35 @@ class Habit(db.Model):
     created_at = db.Column(db.Date, default=date.today)
     
 
+class Checkin(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    habit_id = db.Column(db.Integer, db.ForeignKey('habit.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    __table_args__ = (UniqueConstraint('habit_id', 'date', name='uix_habit_date'),)
+
+
+
+Habit.checkins = db.relationship('Checkin', backref='habit', cascade='all, delete-orphan')
+
 
 with app.app_context():
     db.create_all()
 
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    today = date.today()
+    habits = Habit.query.order_by(Habit.created_at.desc()).all()
+    days = [today - timedelta(days=i) for i in reversed(range(7))]
+
+    check_map = {(c.habit_id, c.date) for c in Checkin.query.filter(Checkin.date >= days[0]).all()}
+
+
+    return render_template('index.html', habits=habits, days=days, check_map=check_map)
 
 @app.route('/habits')
 def habits():
-
 
     habits = Habit.query.order_by(Habit.created_at.desc()).all()
     return render_template('habits.html', habits=habits)
